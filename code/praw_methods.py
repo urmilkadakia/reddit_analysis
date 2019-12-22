@@ -12,6 +12,7 @@ import praw.exceptions
 
 from api_keys import client_secret, client_id, client_username
 from logger import log_reddit_error
+from reconstruction_methods import reconstruct_data_dictionary
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -124,7 +125,11 @@ def reddit_scarper(input_file_path, output_file_path, format=json, clean_usernam
             data_list.append(status)
     # Convert the original file to zip file to reduce the storage space
     if format == 'json':
-            output_file.write(json.dumps(data_list))
+        # retrieve updated records only
+        if time_str.split('_')[-1] != '01':
+            data_list = _generate_longitudinal_data(output_file_path, number_of_users, data_list)
+
+        output_file.write(json.dumps(data_list))
     else:
         # If we are writing the first line of the output file then following code will
         # write the headers of each column in the output file
@@ -141,3 +146,30 @@ def reddit_scarper(input_file_path, output_file_path, format=json, clean_usernam
 
     logger.info('Number of successful ID:' + str(number_of_users - len(username_failed)) + ' and '
                 + 'Number of failed ID:' + str(len(username_failed)))
+
+
+def _generate_longitudinal_data(output_file_path, number_of_users, data_list):
+    """
+    This function will take the array of all the profiles and return an array of profiles that have made changes in
+    their descriptions.
+    :param output_file_path: User input for path to the output folder
+    :param number_of_users: To identify the input file as they are named based on the number of users
+    :param data_list: An array of all the profiles
+    :return: an array of profiles that have made changes in their descriptions
+    """
+    user_profiles = reconstruct_data_dictionary(output_file_path, number_of_users)
+    print(user_profiles)
+
+    # When no base file found
+    if not user_profiles:
+        return data_list
+
+    updated_user_profiles = []
+    for profile in data_list:
+        if profile['data']['name'] in user_profiles and \
+                profile['data']['subreddit']['public_description'] == \
+                user_profiles[profile['data']['name']]['data']['subreddit']['public_description']:
+            continue
+        updated_user_profiles.append(profile)
+
+    return updated_user_profiles
